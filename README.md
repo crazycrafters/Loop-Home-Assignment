@@ -48,7 +48,7 @@ npm start
 and Chromium browser tests. `npm test` builds assets before service tests. Browser
 tests use `/usr/bin/chromium` automatically when available, or an executable selected
 by `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`. Otherwise run
-`npx playwright install --with-deps chromium` first. CI installs Chromium and runs
+`npx playwright install --with-deps chromium` first. CI reuses its preinstalled browser on Ubuntu 24.04 and runs
 the same checks on PRs into `dev` and `main`. Tests use upstream/provider fixtures
 and real SQLite; test execution needs no network access, tokens, or paid requests.
 

@@ -74,7 +74,8 @@ Playwright automatically uses `/usr/bin/chromium` when present. Set
 `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` for another existing executable. Otherwise,
 install its managed browser with `npx playwright install --with-deps chromium`.
 That installation needs the usual browser-download and OS-package access; it is
-not needed merely to run the service. CI installs Chromium before checking.
+not needed merely to run the service. CI pins Ubuntu 24.04, reports its preinstalled Chromium/Chrome version, and reuses
+that browser. It installs Playwright Chromium only if neither system browser exists.
 Browser tests start an isolated production server on port 3177 and use API/provider
 fixtures without network credentials or paid requests. Failure screenshots/traces
 are written under ignored `test-results/`.
