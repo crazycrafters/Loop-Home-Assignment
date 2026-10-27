@@ -14,7 +14,7 @@ export class NarrativeService {
   private cacheBytes = 0;
   private inFlight = new Map<string, Promise<Result>>();
 
-  constructor(private readonly insights: InsightsService, private readonly provider: NarrativeProvider, private readonly ttlSeconds: number) {}
+  constructor(private readonly insights: Pick<InsightsService, 'get'>, private readonly provider: NarrativeProvider, private readonly ttlSeconds: number) {}
 
   private evict(key: string) {
     const entry = this.cache.get(key);

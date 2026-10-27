@@ -52,7 +52,7 @@ export function buildPrompt(report: InsightsReport, facts: Fact[]) {
     facts: facts.map(({ evidenceIds, ...fact }) => ({ ...fact, hasSourceEvidence: evidenceIds.length > 0 })),
     quality: { current: report.current.quality, previous: report.previous.quality },
     warnings: report.warnings,
-    methodology,
+    methodology: { ...methodology, evidence: 'Cite aggregate fact IDs; PR-level evidence is resolved by the service.' },
   };
 }
 export type NarrativeInput = ReturnType<typeof buildPrompt>;
