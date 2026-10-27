@@ -1,59 +1,123 @@
-# Loop repository insights
+# Loop Insights
 
-A GitHub collaboration insights service, built incrementally in feature PRs into `dev`.
+Understand how GitHub work moves: pull-request delivery and review metrics,
+equal-period comparisons, and LLM explanations with verifiable fact citations.
+The service includes a responsive dashboard and a directly queryable HTTP API.
 
-The service will calculate pull-request delivery and review metrics and produce evidence-backed LLM narratives. See each milestone PR for available capabilities.
+## Quickstart — Docker
 
-## Quickstart
+Requires Docker Engine and Compose v2. No host Node.js or database server is needed.
 
-Requires Node.js 24 and npm. No credentials or database are needed for milestone 1.
+```sh
+docker compose up --build --wait
+docker compose exec -T app node scripts/smoke.mjs
+```
+
+Open the service's root page at `http://127.0.0.1:3000` in your own browser. Choose
+**Try an example**, then **Analyze repository**. The example fetches real public
+GitHub data. Optional AI generation requires a configured provider credential.
+`docker compose down` stops the service while retaining its SQLite cache volume.
+
+## Quickstart — Node.js
+
+Requires Node.js **24.5+ within v24** (`.nvmrc` selects v24) and npm.
 
 ```sh
 npm ci
 npm run dev
 ```
 
-In another terminal, `curl --fail http://127.0.0.1:3000/health` returns `{"status":"ok"}`.
-The health endpoint is a process liveness check; it does not claim upstream API readiness.
+In another terminal, `npm run smoke` checks the running service. Production uses
+`npm run build && npm start`. Dashboard edits require rebuild/refresh; backend
+modules are watched in development.
 
-For a production build:
+## Enable the LLM endpoint
+
+Securely set `LLM_API_KEY` on the server and optionally `LLM_MODEL` (default
+`gpt-4.1-mini`). Use environment settings or copy `.env.example` to an ignored `.env`
+and populate it locally. Never put credentials in the browser, Git, or chat.
+Compose reads `.env`; the Node process can load it explicitly:
 
 ```sh
 npm run build
-npm start
+node --use-env-proxy --env-file=.env dist/server.js
 ```
 
-Run all checks with `npm run check` (type checking, tests, production compilation).
-CI runs the same checks for PRs into `dev` and `main`.
+After configuration/restart, request a real narrative deliberately:
 
-## Configuration
+```sh
+# Docker:
+docker compose exec -T app node scripts/smoke.mjs --narrative
+# Node, against a running service:
+npm run smoke -- --narrative
+```
 
-The service reads process environment variables. `.env.example` documents defaults;
-it is not automatically loaded. For a local file, copy it to `.env` and launch with
-`node --env-file=.env --import tsx src/server.ts`.
+Without a key, the narrative endpoint returns `503 LLM_NOT_CONFIGURED`; metrics and
+evidence remain available. **Live OpenAI validation is still pending a credential.**
+The regular smoke check explicitly skips generation and never silently substitutes
+fixture prose. A read-only `GITHUB_TOKEN` is optional for higher GitHub rate limits.
 
-| Variable | Default | Meaning |
-| --- | --- | --- |
-| `NODE_ENV` | `development` | `development`, `test`, or `production` |
-| `HOST` | `127.0.0.1` | Bind address; use `0.0.0.0` in a container when needed |
-| `PORT` | `3000` | Integer from 1 through 65535 |
-| `LOG_LEVEL` | `info` | Standard Pino log level or `silent` |
+## HTTP API
 
-Invalid configuration prevents startup without printing supplied values. Keep tokens
-out of Git and logs. Request logs redact authorization and cookie headers. JSON bodies
-are limited to 64 KiB, unexpected HTTP errors return generic messages with a request
-ID, and SIGINT/SIGTERM close the server gracefully.
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /health` | Process liveness |
+| `GET /api/repos/{owner}/{repo}/insights?from=...&to=...` | Metrics, baseline changes, sample sizes, and PR evidence |
+| `POST /api/repos/{owner}/{repo}/narrative` | LLM observations/hypothesis, confidence, and fact citations |
+| `POST /api/repos/{owner}/{repo}/sync` | Complete cached source snapshot |
 
-## Architecture and milestones
+```sh
+curl --fail-with-body --get http://127.0.0.1:3000/api/repos/sindresorhus/p-limit/insights \
+  --data-urlencode 'from=2026-08-01T00:00:00Z' \
+  --data-urlencode 'to=2026-09-01T00:00:00Z'
+curl --fail-with-body http://127.0.0.1:3000/api/repos/sindresorhus/p-limit/narrative \
+  -H 'Content-Type: application/json' \
+  -d '{"from":"2026-08-01T00:00:00Z","to":"2026-09-01T00:00:00Z"}'
+```
 
-`src/config.ts` validates configuration; `src/app.ts` builds the HTTP application
-without listening, so tests can exercise real request handling; `src/server.ts`
-owns startup and shutdown. Fastify provides HTTP handling and structured logging;
-Zod validates configuration. Strict TypeScript and a committed npm lockfile make
-builds reproducible.
+Periods are half-open UTC intervals of up to 90 days. Delivery metrics concern PRs
+merged into the current default branch during each period; review metrics concern
+qualifying reviews on that merged cohort, including earlier submissions. Current
+backlog is reported separately. Missing timing is `null`, not zero. Every metric
+includes sample size and evidence references. Confidence is a capped, uncalibrated
+hypothesis assessment; these numbers do not establish causation or productivity.
 
-Next milestones add GitHub ingestion and SQLite caching, delivery metrics, LLM
-narratives, a dashboard, and a complete demo. This milestone intentionally has no
-GitHub or LLM credentials, integrations, or metrics endpoints yet.
+## Verification
 
-Feature branches target `dev`. The repository owner opens the final `dev` → `main` PR.
+```sh
+npm run check             # Type checking, build, service tests, Chromium flows
+npm run smoke             # Running service: real GitHub/evidence/cache check
+npm run smoke -- --ui-only
+npm run smoke -- --narrative
+```
+
+Browser tests use `/usr/bin/chromium` or `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` when
+provided. Otherwise install one with `npx playwright install --with-deps chromium`.
+Test execution uses fixtures and real SQLite, with no upstream credentials or paid
+calls. CI checks both the application/browser suite and the production container.
+The container job runs health/assets and a non-root/SQLite/dependency probe without
+external API calls. Real GitHub/browser/container smoke checks were also run in the
+current environment; live model behavior remains a separate pending check.
+
+## Decisions, limits, and submission
+
+TypeScript/Fastify serves API and UI; a worker keeps SQLite and cached JSON work off
+the HTTP event loop. GitHub fetches use a fixed origin, pagination, deadlines,
+bounded concurrency, TTL caching, and explicit size limits. The model sees aggregate
+facts and methodology, while the server validates citations and resolves source
+links. Citation checks do not prove the prose follows from its evidence.
+
+Public repositories only. Snapshot collection is capped at 200 PRs, 1000 reviews
+per PR, and 20 pages per list; oversized or incomplete collections fail explicitly.
+Shared deployment needs caller authorization and billing/rate controls. See the
+short [submission notes](NOTES.md) for trade-offs, next steps, and AI-use disclosure.
+
+- [Ten-minute demo and smoke options](docs/demo.md)
+- [Container deployment, persistence, and proxy trust](docs/deployment.md)
+- [Metric definitions and evidence](docs/metrics.md)
+- [LLM contract, confidence, and validation status](docs/narratives.md)
+- [Dashboard usage and browser development](docs/dashboard.md)
+- [Raw sync API, configuration variables, and errors](docs/api.md)
+- [Final submission checklist](SUBMISSION.md)
+
+Feature PRs target `dev`. The repository owner creates the final `dev` → `main` PR.

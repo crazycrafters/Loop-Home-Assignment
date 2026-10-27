@@ -8,7 +8,7 @@ permissions:
   contents: read
 jobs:
   check:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
@@ -17,4 +17,33 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
+      - name: Prepare Chromium
+        timeout-minutes: 3
+        run: |
+          if [ -x /usr/bin/chromium ]; then
+            /usr/bin/chromium --version
+          elif [ -x /usr/bin/google-chrome ]; then
+            echo "PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/google-chrome" >> "$GITHUB_ENV"
+            /usr/bin/google-chrome --version
+          else
+            npx playwright install --with-deps chromium
+          fi
       - run: npm run check
+
+  package:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      COMPOSE_PROJECT_NAME: loop-ci-package
+      PORT: 3180
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and start production container
+        run: docker compose up --build --wait --wait-timeout 60
+      - name: Verify runtime user, SQLite, and production dependencies
+        run: docker compose exec -T app node scripts/check-container.mjs
+      - name: Check packaged HTTP assets without external API calls
+        run: docker compose exec -T app node scripts/smoke.mjs --ui-only
+      - name: Stop isolated CI containers and remove their test volume
+        if: always()
+        run: docker compose down --volumes --remove-orphans

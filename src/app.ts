@@ -1,7 +1,17 @@
 import Fastify from 'fastify';
 import type { Config } from './config.js';
+import { registerDashboard } from './dashboard/routes.js';
+import { ServiceError } from './errors.js';
+import { GitHubClient } from './github/client.js';
+import { GitHubCollector } from './github/collector.js';
+import { IngestionService } from './github/ingestion.js';
+import { repositoryParams, syncBody } from './github/model.js';
+import { InsightsService } from './insights/service.js';
+import { OpenAIProvider, type NarrativeProvider } from './narrative/provider.js';
+import { NarrativeService } from './narrative/service.js';
+import { SqliteSnapshotCache } from './storage/cache.js';
 
-export function buildApp(config: Config) {
+export function buildApp(config: Config, dependencies: { ingestion?: IngestionService; narrativeProvider?: NarrativeProvider } = {}) {
   const app = Fastify({
     logger: {
       level: config.LOG_LEVEL,
@@ -10,6 +20,49 @@ export function buildApp(config: Config) {
     bodyLimit: 64 * 1024,
     requestTimeout: 30_000,
     trustProxy: false,
+  });
+
+  registerDashboard(app);
+
+  const ingestion = dependencies.ingestion ?? new IngestionService(
+    new GitHubCollector(new GitHubClient(config.GITHUB_TOKEN)),
+    new SqliteSnapshotCache(config.DATABASE_PATH, config.CACHE_TTL_SECONDS),
+    config.CACHE_TTL_SECONDS,
+  );
+  app.addHook('onClose', async () => ingestion.close());
+  const insights = new InsightsService(ingestion);
+  const narrative = new NarrativeService(insights,
+    dependencies.narrativeProvider ?? new OpenAIProvider(config.LLM_API_KEY, config.LLM_MODEL),
+    config.CACHE_TTL_SECONDS);
+
+  app.post('/api/repos/:owner/:repo/narrative', async (request, reply) => {
+    const params = repositoryParams.safeParse(request.params);
+    const body = syncBody.safeParse(request.body);
+    if (!params.success || !body.success) {
+      throw new ServiceError(400, 'INVALID_INPUT', 'Use a valid repository and ISO-8601 from/to timestamps spanning at most 90 days');
+    }
+    reply.header('Cache-Control', 'no-store');
+    return narrative.get(params.data.owner, params.data.repo, body.data);
+  });
+
+  app.get('/api/repos/:owner/:repo/insights', async (request, reply) => {
+    const params = repositoryParams.safeParse(request.params);
+    const query = syncBody.safeParse(request.query);
+    if (!params.success || !query.success) {
+      throw new ServiceError(400, 'INVALID_INPUT', 'Use a valid repository and ISO-8601 from/to query timestamps spanning at most 90 days');
+    }
+    reply.header('Cache-Control', 'no-store');
+    return insights.get(params.data.owner, params.data.repo, query.data);
+  });
+
+  app.post('/api/repos/:owner/:repo/sync', async (request, reply) => {
+    const params = repositoryParams.safeParse(request.params);
+    const body = syncBody.safeParse(request.body);
+    if (!params.success || !body.success) {
+      throw new ServiceError(400, 'INVALID_INPUT', 'Use a valid repository and ISO-8601 from/to timestamps spanning at most 90 days');
+    }
+    reply.header('Cache-Control', 'no-store');
+    return ingestion.sync(params.data.owner, params.data.repo, body.data);
   });
 
   app.get('/health', {
@@ -26,6 +79,10 @@ export function buildApp(config: Config) {
   }, async () => ({ status: 'ok' }));
 
   app.setErrorHandler((error, request, reply) => {
+    if (error instanceof ServiceError) {
+      if (error.retryAfter) reply.header('Retry-After', error.retryAfter);
+      return reply.status(error.statusCode).send({ error: error.message, code: error.code, requestId: request.id });
+    }
     const code = typeof error === 'object' && error !== null && 'statusCode' in error
       ? error.statusCode : undefined;
     const status = typeof code === 'number' && Number.isInteger(code) && code >= 400 && code < 500
