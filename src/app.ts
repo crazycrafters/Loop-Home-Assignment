@@ -5,6 +5,7 @@ import { GitHubClient } from './github/client.js';
 import { GitHubCollector } from './github/collector.js';
 import { IngestionService } from './github/ingestion.js';
 import { repositoryParams, syncBody } from './github/model.js';
+import { InsightsService } from './insights/service.js';
 import { SqliteSnapshotCache } from './storage/cache.js';
 
 export function buildApp(config: Config, dependencies: { ingestion?: IngestionService } = {}) {
@@ -24,6 +25,17 @@ export function buildApp(config: Config, dependencies: { ingestion?: IngestionSe
     config.CACHE_TTL_SECONDS,
   );
   app.addHook('onClose', async () => ingestion.close());
+  const insights = new InsightsService(ingestion);
+
+  app.get('/api/repos/:owner/:repo/insights', async (request, reply) => {
+    const params = repositoryParams.safeParse(request.params);
+    const query = syncBody.safeParse(request.query);
+    if (!params.success || !query.success) {
+      throw new ServiceError(400, 'INVALID_INPUT', 'Use a valid repository and ISO-8601 from/to query timestamps spanning at most 90 days');
+    }
+    reply.header('Cache-Control', 'no-store');
+    return insights.get(params.data.owner, params.data.repo, query.data);
+  });
 
   app.post('/api/repos/:owner/:repo/sync', async (request, reply) => {
     const params = repositoryParams.safeParse(request.params);

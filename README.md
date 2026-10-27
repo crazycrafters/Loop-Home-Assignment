@@ -1,9 +1,9 @@
 # Loop repository insights
 
 A TypeScript service that collects public GitHub pull-request and review data for
-repository delivery insights. Milestones 1–2 provide the HTTP foundation, GitHub
-ingestion, and SQLite caching. Calculated metrics, LLM narratives, and the dashboard
-will arrive in later feature PRs into `dev`.
+repository delivery insights. Milestones 1–3 provide GitHub ingestion, SQLite caching,
+and period-based delivery/review metrics with source evidence. LLM narratives and
+the dashboard will arrive in later feature PRs into `dev`.
 
 ## Quickstart
 
@@ -19,6 +19,9 @@ In another terminal:
 
 ```sh
 curl --fail http://127.0.0.1:3000/health
+curl --fail-with-body --get http://127.0.0.1:3000/api/repos/sindresorhus/p-limit/insights \
+  --data-urlencode 'from=2026-08-01T00:00:00Z' \
+  --data-urlencode 'to=2026-09-01T00:00:00Z'
 curl --fail-with-body http://127.0.0.1:3000/api/repos/sindresorhus/p-limit/sync \
   -H 'Content-Type: application/json' \
   -d '{"from":"2026-08-01T00:00:00Z","to":"2026-09-01T00:00:00Z"}'
@@ -39,6 +42,27 @@ npm start
 `npm run check` runs strict type checking, offline tests, and production compilation.
 CI runs the same command on PRs into `dev` and `main`. The tests use upstream fixtures
 and real SQLite; they need no network access or tokens.
+
+## Insights API
+
+`GET /api/repos/{owner}/{repo}/insights?from=<timestamp>&to=<timestamp>`
+
+Returns throughput, merge and first-review timing, change size, review coverage,
+reviewer concentration, and contributor/reviewer tables. Every metric includes
+its sample size and references to PR evidence with source links. The response
+compares the requested period with the preceding equal-duration period and reports
+current backlog separately. Empty timing samples return `null`, not zero.
+
+No preceding sync call is required: the endpoint collects and caches both periods
+in one source snapshot. Use ISO-8601 timestamps with a timezone and a positive
+period no longer than 90 days. Collection may therefore cover up to 180 days;
+existing collection limits apply to that combined source window. For August 1–
+September 1, the baseline is July 1–August 1. Review metrics cover **PRs merged in
+the period**, including their earlier reviews, not all reviews posted repository-wide.
+
+See [metric definitions and evidence](docs/metrics.md) for exact populations,
+formulas, missing-data behavior, comparison semantics, and interpretation limits.
+Source errors propagate rather than masquerading as zero metrics.
 
 ## Sync API
 
@@ -161,7 +185,9 @@ and pagination, `collector.ts` selects and normalizes source data, and `ingestio
 coordinates caching and duplicate requests. `src/storage/` provides worker-backed
 SQLite persistence. Tests exercise boundaries with fixture transports and real storage.
 
-Next: delivery/review metrics with documented populations and evidence, LLM
-narratives, a lightweight dashboard, and a complete demo. Feature PRs target `dev`;
+The pure calculations in `src/insights/metrics.ts` are separated from collection
+and HTTP; `service.ts` builds both cohorts from one cached snapshot.
+
+Next: evidence-backed LLM narratives, a lightweight dashboard, and a complete demo. Feature PRs target `dev`;
 the repository owner opens the final `dev` → `main` PR. See NOTES.md for trade-offs
 and AI-use disclosure.
