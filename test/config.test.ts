@@ -20,3 +20,12 @@ test('rejects invalid settings without leaking values', () => {
   assert.throws(() => loadConfig({ NODE_ENV: 'sensitive-value', HOST: ' ', LOG_LEVEL: 'bad' }),
     { message: 'Invalid configuration: NODE_ENV, HOST, LOG_LEVEL' });
 });
+
+test('storage and cache settings are validated without exposing token values', () => {
+  for (const env of [{ CACHE_TTL_SECONDS: '0' }, { CACHE_TTL_SECONDS: '3601' }, { DATABASE_PATH: '' }]) {
+    assert.throws(() => loadConfig(env), /Invalid configuration:/);
+  }
+  const config = loadConfig({ GITHUB_TOKEN: ' test-token ', CACHE_TTL_SECONDS: '60' });
+  assert.equal(config.GITHUB_TOKEN, 'test-token');
+  assert.equal(config.CACHE_TTL_SECONDS, 60);
+});
