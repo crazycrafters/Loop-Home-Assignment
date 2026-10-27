@@ -18,6 +18,11 @@ function sampleWarnings(insights: PeriodInsights, label: 'current' | 'previous')
     code: 'NO_QUALIFYING_REVIEWS', period: label,
     message: 'No identifiable non-author reviews before merge; review latency is unavailable.',
   });
+  const reviewed = insights.metrics.medianFirstReviewHours.sampleSize;
+  if (reviewed > 0 && reviewed < 5) warnings.push({
+    code: 'SMALL_REVIEW_SAMPLE', period: label,
+    message: `Only ${reviewed} merged PRs have a qualifying review; review timing may not represent the whole cohort.`,
+  });
   if (insights.quality.mergedPrsWithUnknownAuthor > 0) warnings.push({
     code: 'UNKNOWN_AUTHORS', period: label,
     message: 'Deleted/unknown PR authors are excluded from contributor rankings and review eligibility.',
