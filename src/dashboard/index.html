@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Understand GitHub delivery and review patterns, with evidence behind every number."
+    />
+    <title>Loop Insights — Repository signals</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="/assets/dashboard.css" />
+    <script type="module" src="/assets/dashboard.js"></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="Loop Insights home"
+        ><span class="brand-mark" aria-hidden="true"
+          ><svg viewBox="0 0 24 24"><path d="M6 18 18 6M6 6h12v12" /></svg
+        ></span>
+        loop<span class="brand-divider">/</span
+        ><span class="brand-product">insights</span></a
+      >
+      <span class="environment-label"
+        ><span aria-hidden="true">●</span> Public GitHub data</span
+      >
+    </header>
+    <main id="main" class="shell">
+      <section class="intro" aria-labelledby="page-title">
+        <p class="eyebrow">REPOSITORY SIGNALS</p>
+        <h1 id="page-title">Understand how work moves.</h1>
+        <p class="intro-copy">
+          Delivery patterns, review bottlenecks, and the evidence behind them.
+        </p>
+      </section>
+      <section
+        class="query-panel"
+        aria-label="Choose repository and reporting period"
+      >
+        <form id="query-form">
+          <div class="field repository-field">
+            <label for="repository">GitHub repository</label
+            ><input
+              id="repository"
+              name="repository"
+              type="text"
+              placeholder="owner / repository"
+              required
+              autocomplete="off"
+              spellcheck="false"
+              maxlength="140"
+              aria-describedby="repository-hint"
+            /><span id="repository-hint" class="field-hint"
+              >Public repositories · default branch</span
+            >
+          </div>
+          <div class="field">
+            <label for="from">From <span class="muted">UTC</span></label
+            ><input id="from" name="from" type="date" required />
+          </div>
+          <div class="field">
+            <label for="to"
+              >Before <span class="muted">UTC, exclusive</span></label
+            ><input id="to" name="to" type="date" required />
+          </div>
+          <button id="analyze" class="button button-primary" type="submit">
+            Analyze repository <span aria-hidden="true">→</span>
+          </button>
+        </form>
+        <div class="query-footer">
+          <span
+            >Compare with the preceding equal-length period. Up to 90
+            days.</span
+          ><button id="example" type="button" class="text-button">
+            Try an example →
+          </button>
+        </div>
+      </section>
+      <div
+        id="status"
+        class="status-line"
+        role="status"
+        aria-live="polite"
+      ></div>
+      <div id="error" class="notice notice-error" role="alert" hidden></div>
+      <section id="welcome" class="welcome" aria-labelledby="welcome-heading">
+        <div class="welcome-heading">
+          <span class="section-number">01 /</span>
+          <h2 id="welcome-heading">A clearer view of collaboration.</h2>
+          <p>
+            Choose a repository and period to start. Every finding stays
+            connected to its source.
+          </p>
+        </div>
+        <div class="welcome-grid">
+          <article>
+            <span class="feature-symbol" aria-hidden="true">→</span>
+            <h3>Follow delivery</h3>
+            <p>
+              See throughput and elapsed merge time, with an equal-length
+              baseline for context.
+            </p>
+          </article>
+          <article>
+            <span class="feature-symbol" aria-hidden="true">↔</span>
+            <h3>Understand reviews</h3>
+            <p>
+              Explore first-review timing, coverage, and how review
+              participation is distributed.
+            </p>
+          </article>
+          <article>
+            <span class="feature-symbol" aria-hidden="true">⌕</span>
+            <h3>Check the evidence</h3>
+            <p>
+              Trace each metric and optional AI explanation back to the
+              contributing pull requests.
+            </p>
+          </article>
+        </div>
+      </section>
+      <div id="report" hidden>
+        <section class="report-heading" aria-labelledby="repository-heading">
+          <div>
+            <p class="eyebrow">DELIVERY OVERVIEW</p>
+            <h2 id="repository-heading"></h2>
+            <p id="period-label" class="muted small"></p>
+            <p id="baseline-label" class="muted small"></p>
+          </div>
+          <div class="source-meta">
+            <span id="freshness"></span
+            ><a id="api-link" target="_blank" rel="noopener noreferrer"
+              >View API response →</a
+            >
+          </div>
+        </section>
+        <div id="empty-cohort" class="notice" hidden>
+          No PRs merged in this period. Timing metrics need merged work; current
+          backlog and source evidence remain available.
+        </div>
+        <section
+          id="metric-cards"
+          class="metric-grid"
+          aria-label="Key delivery and review metrics"
+        ></section>
+        <div class="context-row">
+          <span class="legend"
+            ><i class="legend-current" aria-hidden="true"></i> Selected period
+            <i class="legend-previous" aria-hidden="true"></i> Previous
+            period</span
+          ><span>Elapsed calendar time · includes draft time</span>
+        </div>
+        <details id="quality" class="quality-note">
+          <summary id="quality-summary">Data quality notes</summary>
+          <ul id="warnings"></ul>
+        </details>
+        <div class="middle-grid">
+          <section
+            class="panel narrative-panel"
+            aria-labelledby="narrative-heading"
+          >
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">THE STORY BEHIND THE NUMBERS</p>
+                <h2 id="narrative-heading">An explanation, with receipts.</h2>
+              </div>
+              <span class="tag">Optional AI</span>
+            </div>
+            <p class="muted">
+              Ask for a short interpretation and a tentative hypothesis. Check
+              its confidence, caveats, and source evidence.
+            </p>
+            <button
+              id="generate"
+              type="button"
+              class="button button-secondary"
+              disabled
+            >
+              Generate explanation
+            </button>
+            <p
+              id="narrative-status"
+              role="status"
+              aria-live="polite"
+              class="status-line"
+            ></p>
+            <div
+              id="narrative-error"
+              role="alert"
+              class="notice notice-error"
+              hidden
+            ></div>
+            <div id="narrative-result" hidden></div>
+          </section>
+          <section
+            class="panel backlog-panel"
+            aria-labelledby="backlog-heading"
+          >
+            <p class="eyebrow">CURRENT SNAPSHOT</p>
+            <h2 id="backlog-heading">Work still in flight</h2>
+            <div id="backlog-stats"></div>
+            <p id="backlog-time" class="small muted"></p>
+            <p class="small muted">
+              Current open PRs, not historical backlog at the end of the
+              selected period.
+            </p>
+          </section>
+        </div>
+        <div class="people-grid">
+          <section class="panel" aria-labelledby="contributors-heading">
+            <div class="panel-heading">
+              <h2 id="contributors-heading">Merged contributions</h2>
+              <span class="small muted">Top 5</span>
+            </div>
+            <div id="contributors"></div>
+          </section>
+          <section class="panel" aria-labelledby="reviewers-heading">
+            <div class="panel-heading">
+              <h2 id="reviewers-heading">Review participation</h2>
+              <span class="small muted">Top 5</span>
+            </div>
+            <div id="reviewers"></div>
+          </section>
+        </div>
+        <p class="small muted people-note">
+          Accounts include automation. Counts describe activity, not individual
+          productivity. Review activity belongs to the merged-PR cohort.
+        </p>
+        <details class="panel all-metrics">
+          <summary>All metrics &amp; definitions</summary>
+          <div id="all-metrics" class="table-scroll"></div>
+        </details>
+        <section
+          id="evidence-section"
+          class="panel evidence-panel"
+          aria-labelledby="evidence-heading"
+        >
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">FOLLOW THE SOURCE</p>
+              <h2 id="evidence-heading" tabindex="-1">Pull request evidence</h2>
+            </div>
+            <button id="clear-filter" type="button" class="text-button" hidden>
+              Show all PRs
+            </button>
+          </div>
+          <p id="evidence-context" class="muted small"></p>
+          <div id="evidence-list"></div>
+        </section>
+      </div>
+      <footer class="footer">
+        <span>Loop Insights</span
+        ><span>Patterns inform questions. They don’t prove causes.</span>
+      </footer>
+    </main>
+  </body>
+</html>
