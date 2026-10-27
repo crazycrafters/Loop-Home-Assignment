@@ -1,9 +1,9 @@
 # Loop repository insights
 
 A TypeScript service that collects public GitHub pull-request and review data for
-repository delivery insights. Milestones 1–3 provide GitHub ingestion, SQLite caching,
-and period-based delivery/review metrics with source evidence. LLM narratives and
-the dashboard will arrive in later feature PRs into `dev`.
+repository delivery insights. Milestones 1–4 provide GitHub ingestion, SQLite caching,
+delivery/review metrics, and an LLM narrative endpoint with validated fact citations.
+A lightweight dashboard will arrive in the next feature PR into `dev`.
 
 ## Quickstart
 
@@ -63,6 +63,20 @@ the period**, including their earlier reviews, not all reviews posted repository
 See [metric definitions and evidence](docs/metrics.md) for exact populations,
 formulas, missing-data behavior, comparison semantics, and interpretation limits.
 Source errors propagate rather than masquerading as zero metrics.
+
+## Narrative API
+
+`POST /api/repos/{owner}/{repo}/narrative` with JSON `from` and `to` timestamps.
+
+Configure `LLM_API_KEY` securely and optionally `LLM_MODEL` (default `gpt-4.1-mini`).
+The endpoint calls OpenAI's Responses API to produce short observations and a
+qualified hypothesis, or abstention, with capped confidence and exact fact
+citations linked to source PRs. It computes its own metrics and accepts no custom
+prompt or caller-provided numbers. Without a key, it returns explicit
+`503 LLM_NOT_CONFIGURED`; health, sync, and metrics remain available.
+
+See [narrative setup, evidence, and validation status](docs/narratives.md).
+Automated provider fixtures pass; **live LLM validation is pending a credential**.
 
 ## Sync API
 
@@ -154,6 +168,8 @@ it is not automatically loaded. For a local file, copy it to `.env` and launch w
 | `DATABASE_PATH` | `./data/loop.sqlite` | SQLite path, relative to the working directory |
 | `CACHE_TTL_SECONDS` | `300` | Snapshot freshness, integer from 1 to 3600 seconds |
 | `GITHUB_TOKEN` | unset | Optional read-only GitHub token for public data |
+| `LLM_API_KEY` | unset | Provider credential required only for narratives |
+| `LLM_MODEL` | `gpt-4.1-mini` | Responses API model supporting strict JSON-schema output |
 
 Keep tokens in environment settings or a local ignored `.env`, never in Git or logs.
 An explicitly configured invalid token causes an upstream error rather than silently
@@ -188,6 +204,10 @@ SQLite persistence. Tests exercise boundaries with fixture transports and real s
 The pure calculations in `src/insights/metrics.ts` are separated from collection
 and HTTP; `service.ts` builds both cohorts from one cached snapshot.
 
-Next: evidence-backed LLM narratives, a lightweight dashboard, and a complete demo. Feature PRs target `dev`;
+The `src/narrative/` adapter sends aggregate facts to a fixed provider origin and
+validates structured citations before resolving source evidence. Its bounded
+in-process cache avoids duplicate generations; confidence is explicitly uncalibrated.
+
+Next: a lightweight dashboard and a complete demo. Feature PRs target `dev`;
 the repository owner opens the final `dev` → `main` PR. See NOTES.md for trade-offs
 and AI-use disclosure.
