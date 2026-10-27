@@ -127,5 +127,5 @@ A larger merge-time median alongside a larger first-review median is a reason to
 investigate waiting for review. It does not establish that review capacity caused
 the slowdown. Check coverage, cohort size, change sizes, draft time, and source
 limitations before comparing periods. More lines or reviews do not imply better
-individual performance. The next milestone will use these facts and evidence to
-produce explicitly qualified LLM hypotheses.
+individual performance. The narrative endpoint uses these facts and evidence to produce explicitly
+qualified LLM hypotheses.
