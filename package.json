@@ -13,7 +13,8 @@
     "typecheck": "tsc --noEmit",
     "test": "npm run build && tsx --test test/*.test.ts",
     "check": "npm run typecheck && npm test && npm run test:browser",
-    "test:browser": "playwright test"
+    "test:browser": "playwright test",
+    "smoke": "node --use-env-proxy scripts/smoke.mjs"
   },
   "dependencies": {
     "fastify": "5.12.7",

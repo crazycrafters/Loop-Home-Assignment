@@ -1,225 +1,123 @@
-# Loop repository insights
+# Loop Insights
 
-A TypeScript service that collects public GitHub pull-request and review data for
-repository delivery insights. Milestones 1–5 provide GitHub ingestion, SQLite caching,
-delivery/review metrics, LLM narratives with validated fact citations, and a responsive
-dashboard served by the same service.
+Understand how GitHub work moves: pull-request delivery and review metrics,
+equal-period comparisons, and LLM explanations with verifiable fact citations.
+The service includes a responsive dashboard and a directly queryable HTTP API.
 
-## Quickstart
+## Quickstart — Docker
 
-Requires Node.js **24.5 or newer within v24** and npm (`.nvmrc` selects v24).
-No database server or API token is required for public GitHub data.
+Requires Docker Engine and Compose v2. No host Node.js or database server is needed.
+
+```sh
+docker compose up --build --wait
+docker compose exec -T app node scripts/smoke.mjs
+```
+
+Open the service's root page at `http://127.0.0.1:3000` in your own browser. Choose
+**Try an example**, then **Analyze repository**. The example fetches real public
+GitHub data. Optional AI generation requires a configured provider credential.
+`docker compose down` stops the service while retaining its SQLite cache volume.
+
+## Quickstart — Node.js
+
+Requires Node.js **24.5+ within v24** (`.nvmrc` selects v24) and npm.
 
 ```sh
 npm ci
 npm run dev
 ```
 
-Open the local service’s root page (`/`) for the dashboard. Enter a public
-repository and UTC dates, or choose **Try an example**, then click **Analyze
-repository**. Optional narrative generation requires a server-side LLM credential.
-See [dashboard workflow and development](docs/dashboard.md).
+In another terminal, `npm run smoke` checks the running service. Production uses
+`npm run build && npm start`. Dashboard edits require rebuild/refresh; backend
+modules are watched in development.
 
-For direct API requests, in another terminal:
+## Enable the LLM endpoint
+
+Securely set `LLM_API_KEY` on the server and optionally `LLM_MODEL` (default
+`gpt-4.1-mini`). Use environment settings or copy `.env.example` to an ignored `.env`
+and populate it locally. Never put credentials in the browser, Git, or chat.
+Compose reads `.env`; the Node process can load it explicitly:
 
 ```sh
-curl --fail http://127.0.0.1:3000/health
+npm run build
+node --use-env-proxy --env-file=.env dist/server.js
+```
+
+After configuration/restart, request a real narrative deliberately:
+
+```sh
+# Docker:
+docker compose exec -T app node scripts/smoke.mjs --narrative
+# Node, against a running service:
+npm run smoke -- --narrative
+```
+
+Without a key, the narrative endpoint returns `503 LLM_NOT_CONFIGURED`; metrics and
+evidence remain available. **Live OpenAI validation is still pending a credential.**
+The regular smoke check explicitly skips generation and never silently substitutes
+fixture prose. A read-only `GITHUB_TOKEN` is optional for higher GitHub rate limits.
+
+## HTTP API
+
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /health` | Process liveness |
+| `GET /api/repos/{owner}/{repo}/insights?from=...&to=...` | Metrics, baseline changes, sample sizes, and PR evidence |
+| `POST /api/repos/{owner}/{repo}/narrative` | LLM observations/hypothesis, confidence, and fact citations |
+| `POST /api/repos/{owner}/{repo}/sync` | Complete cached source snapshot |
+
+```sh
 curl --fail-with-body --get http://127.0.0.1:3000/api/repos/sindresorhus/p-limit/insights \
   --data-urlencode 'from=2026-08-01T00:00:00Z' \
   --data-urlencode 'to=2026-09-01T00:00:00Z'
-curl --fail-with-body http://127.0.0.1:3000/api/repos/sindresorhus/p-limit/sync \
+curl --fail-with-body http://127.0.0.1:3000/api/repos/sindresorhus/p-limit/narrative \
   -H 'Content-Type: application/json' \
   -d '{"from":"2026-08-01T00:00:00Z","to":"2026-09-01T00:00:00Z"}'
 ```
 
-The health endpoint returns `{"status":"ok"}` and checks process liveness, not
-GitHub or storage readiness. Sync returns the collected `snapshot` and
-`cache: { "hit": false, "ttlSeconds": 300 }`. An immediate repeat returns the same
-snapshot with `hit: true` and makes no upstream requests.
+Periods are half-open UTC intervals of up to 90 days. Delivery metrics concern PRs
+merged into the current default branch during each period; review metrics concern
+qualifying reviews on that merged cohort, including earlier submissions. Current
+backlog is reported separately. Missing timing is `null`, not zero. Every metric
+includes sample size and evidence references. Confidence is a capped, uncalibrated
+hypothesis assessment; these numbers do not establish causation or productivity.
 
-For a production build:
+## Verification
 
 ```sh
-npm run build
-npm start
+npm run check             # Type checking, build, service tests, Chromium flows
+npm run smoke             # Running service: real GitHub/evidence/cache check
+npm run smoke -- --ui-only
+npm run smoke -- --narrative
 ```
 
-`npm run check` runs strict type checking, production compilation, service tests,
-and Chromium browser tests. `npm test` builds assets before service tests. Browser
-tests use `/usr/bin/chromium` automatically when available, or an executable selected
-by `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`. Otherwise run
-`npx playwright install --with-deps chromium` first. CI reuses its preinstalled browser on Ubuntu 24.04 and runs
-the same checks on PRs into `dev` and `main`. Tests use upstream/provider fixtures
-and real SQLite; test execution needs no network access, tokens, or paid requests.
+Browser tests use `/usr/bin/chromium` or `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` when
+provided. Otherwise install one with `npx playwright install --with-deps chromium`.
+Test execution uses fixtures and real SQLite, with no upstream credentials or paid
+calls. CI checks both the application/browser suite and the production container.
+The container job runs health/assets and a non-root/SQLite/dependency probe without
+external API calls. Real GitHub/browser/container smoke checks were also run in the
+current environment; live model behavior remains a separate pending check.
 
-## Insights API
+## Decisions, limits, and submission
 
-`GET /api/repos/{owner}/{repo}/insights?from=<timestamp>&to=<timestamp>`
+TypeScript/Fastify serves API and UI; a worker keeps SQLite and cached JSON work off
+the HTTP event loop. GitHub fetches use a fixed origin, pagination, deadlines,
+bounded concurrency, TTL caching, and explicit size limits. The model sees aggregate
+facts and methodology, while the server validates citations and resolves source
+links. Citation checks do not prove the prose follows from its evidence.
 
-Returns throughput, merge and first-review timing, change size, review coverage,
-reviewer concentration, and contributor/reviewer tables. Every metric includes
-its sample size and references to PR evidence with source links. The response
-compares the requested period with the preceding equal-duration period and reports
-current backlog separately. Empty timing samples return `null`, not zero.
+Public repositories only. Snapshot collection is capped at 200 PRs, 1000 reviews
+per PR, and 20 pages per list; oversized or incomplete collections fail explicitly.
+Shared deployment needs caller authorization and billing/rate controls. See the
+short [submission notes](NOTES.md) for trade-offs, next steps, and AI-use disclosure.
 
-No preceding sync call is required: the endpoint collects and caches both periods
-in one source snapshot. Use ISO-8601 timestamps with a timezone and a positive
-period no longer than 90 days. Collection may therefore cover up to 180 days;
-existing collection limits apply to that combined source window. For August 1–
-September 1, the baseline is July 1–August 1. Review metrics cover **PRs merged in
-the period**, including their earlier reviews, not all reviews posted repository-wide.
+- [Ten-minute demo and smoke options](docs/demo.md)
+- [Container deployment, persistence, and proxy trust](docs/deployment.md)
+- [Metric definitions and evidence](docs/metrics.md)
+- [LLM contract, confidence, and validation status](docs/narratives.md)
+- [Dashboard usage and browser development](docs/dashboard.md)
+- [Raw sync API, configuration variables, and errors](docs/api.md)
+- [Final submission checklist](SUBMISSION.md)
 
-See [metric definitions and evidence](docs/metrics.md) for exact populations,
-formulas, missing-data behavior, comparison semantics, and interpretation limits.
-Source errors propagate rather than masquerading as zero metrics.
-
-## Narrative API
-
-`POST /api/repos/{owner}/{repo}/narrative` with JSON `from` and `to` timestamps.
-
-Configure `LLM_API_KEY` securely and optionally `LLM_MODEL` (default `gpt-4.1-mini`).
-The endpoint calls OpenAI's Responses API to produce short observations and a
-qualified hypothesis, or abstention, with capped confidence and exact fact
-citations linked to source PRs. It computes its own metrics and accepts no custom
-prompt or caller-provided numbers. Without a key, it returns explicit
-`503 LLM_NOT_CONFIGURED`; health, sync, and metrics remain available.
-
-See [narrative setup, evidence, and validation status](docs/narratives.md).
-Automated provider fixtures pass; **live LLM validation is pending a credential**.
-
-## Sync API
-
-`POST /api/repos/{owner}/{repo}/sync`
-
-The JSON body must contain only `from` and `to`: ISO-8601 timestamps with a timezone,
-with a positive period of at most 90 days. Boundaries are **from inclusive, to
-exclusive**, normalized to UTC. Repository names are validated and all requests go
-to the fixed `https://api.github.com` origin. Only public repositories are supported,
-even when a token could access private repositories.
-
-A complete snapshot contains:
-
-- Repository identity and default branch.
-- PRs targeting that branch that were **merged or closed during the period**.
-- A separate population of **currently open PRs**, including inactive PRs older than
-  the period. Filter `pulls` by `state` to distinguish the populations. Open backlog
-  describes collection time, not the historical end of the period.
-- For every included PR: source URL, author (nullable for deleted accounts), state,
-  current draft status, creation/update/closure/merge timestamps, lines added/deleted,
-  changed-file count, and submitted/pending review records with reviewer, decision,
-  and timestamp. Raw source code, diffs, titles, and comment bodies are not persisted.
-
-`fetchedAt` records completion time. GitHub reads are not an atomic snapshot; activity
-may change during collection. Draft status, review decisions (including dismissed
-reviews), default branch, and open/closed state reflect current upstream data, not
-historical reconstructions. A detected base-branch change during collection returns
-`409 SOURCE_CHANGED` so callers can retry. Deleted accounts remain `null` rather than
-being counted as a fabricated contributor. The metrics milestone will define which
-review records qualify for each calculation.
-
-### Upstream access and limits
-
-The collector uses GitHub REST API version `2022-11-28`:
-
-- `GET /repos/{owner}/{repo}`
-- `GET /repos/{owner}/{repo}/pulls` (separate open and closed scans, default-branch filter)
-- `GET /repos/{owner}/{repo}/pulls/{number}`
-- `GET /repos/{owner}/{repo}/pulls/{number}/reviews`
-
-Pages contain up to 100 items. Closed PRs are scanned by descending update time,
-stopping once updates predate `from`; merge/closure timestamps determine inclusion.
-At most three detail/review requests run concurrently per sync, with two distinct
-syncs admitted per process. Identical in-flight requests share the same collection.
-Requests time out after 10 seconds; a collection has a 120-second deadline. Transient
-502/503/504 GET responses retry once; authorization and rate-limit errors do not retry.
-Redirects are rejected, and upstream pagination URLs are never followed.
-
-Bounds: 20 pages per list, 200 included PRs, 1000 unique reviews per PR, 2 MiB per
-upstream response, and 8 MiB per stored snapshot. Limits return explicit errors;
-partial results are never cached. Choose a smaller repository or shorter period
-when limits are reached. A shorter period cannot reduce the current open backlog.
-
-Unauthenticated GitHub access normally allows 60 requests/hour; a read-only token
-usually raises the limit. Fetching a fresh snapshot costs repository/list pages plus
-one detail request and review pages for every included PR. API limits also depend on
-GitHub's secondary limits and any proxy-supplied authentication.
-
-### Errors
-
-Errors have `error`, `code`, and `requestId` fields for sync-specific failures.
-Malformed JSON and generic HTTP errors use the foundation's `error`/`requestId` shape.
-No upstream response bodies or token values are returned.
-
-| HTTP | Example code | Meaning |
-| --- | --- | --- |
-| 400 | `INVALID_INPUT` | Invalid repository or date range |
-| 403 | `PUBLIC_REPOSITORY_REQUIRED` | Private repositories are unsupported |
-| 404 | `REPOSITORY_NOT_FOUND` | Repository/PR unavailable or removed during sync |
-| 409 | `SOURCE_CHANGED` | PR base changed during collection; retry |
-| 422 | `COLLECTION_LIMIT` | A documented collection/storage limit was reached |
-| 502 | `GITHUB_UNAVAILABLE`, `GITHUB_INVALID_RESPONSE`, `GITHUB_ACCESS_DENIED` | Upstream transport, payload, or credential failure |
-| 503 | `GITHUB_RATE_LIMITED`, `SYNC_BUSY`, `STORAGE_UNAVAILABLE` | Retryable upstream/admission/storage issue |
-
-Rate-limited and busy responses include a bounded `Retry-After` in seconds.
-
-## Configuration and persistence
-
-The service reads process environment variables. `.env.example` documents defaults;
-it is not automatically loaded. For a local file, copy it to `.env` and launch with
-`node --use-env-proxy --env-file=.env --import tsx src/server.ts`.
-
-| Variable | Default | Meaning |
-| --- | --- | --- |
-| `NODE_ENV` | `development` | `development`, `test`, or `production` |
-| `HOST` | `127.0.0.1` | Bind address; use `0.0.0.0` in a container when needed |
-| `PORT` | `3000` | Integer from 1 through 65535 |
-| `LOG_LEVEL` | `info` | Standard Pino log level or `silent` |
-| `DATABASE_PATH` | `./data/loop.sqlite` | SQLite path, relative to the working directory |
-| `CACHE_TTL_SECONDS` | `300` | Snapshot freshness, integer from 1 to 3600 seconds |
-| `GITHUB_TOKEN` | unset | Optional read-only GitHub token for public data |
-| `LLM_API_KEY` | unset | Provider credential required only for narratives |
-| `LLM_MODEL` | `gpt-4.1-mini` | Responses API model supporting strict JSON-schema output |
-
-Keep tokens in environment settings or a local ignored `.env`, never in Git or logs.
-An explicitly configured invalid token causes an upstream error rather than silently
-falling back to anonymous access. The start/dev commands respect standard HTTP(S)
-proxy environment variables and the existing TLS trust configuration.
-
-SQLite is created automatically and runs in a worker thread, including database I/O
-and cached JSON parsing/serialization. Snapshots are keyed by schema version,
-case-normalized repository, and exact normalized period. Only successful complete
-collections are written, atomically. Expired entries are removed on writes and the
-cache retains at most 100 snapshots. Database and snapshot sizes remain bounded;
-SQLite can retain allocated disk pages after eviction. `ttlSeconds` in the response
-is the configured freshness duration, not a remaining-time countdown.
-
-Mount `data/` on a persistent volume to keep snapshots across container recreation.
-The database and WAL files are ignored by Git. Keep this directory private. Changing
-the token does not invalidate already cached public snapshots. Expired snapshots
-are not served as a fallback when GitHub is unavailable.
-
-Invalid configuration prevents startup without printing supplied values. Request
-logs redact authorization and cookie headers. Request bodies are limited to 64 KiB.
-SIGINT/SIGTERM close the server and storage, with a 10-second hard shutdown deadline.
-
-## Architecture and next milestones
-
-`src/config.ts` validates configuration; `src/app.ts` wires routes and dependencies;
-`src/server.ts` owns startup and shutdown. `src/github/client.ts` handles bounded HTTP
-and pagination, `collector.ts` selects and normalizes source data, and `ingestion.ts`
-coordinates caching and duplicate requests. `src/storage/` provides worker-backed
-SQLite persistence. Tests exercise boundaries with fixture transports and real storage.
-
-The pure calculations in `src/insights/metrics.ts` are separated from collection
-and HTTP; `service.ts` builds both cohorts from one cached snapshot.
-
-The `src/narrative/` adapter sends aggregate facts to a fixed provider origin and
-validates structured citations before resolving source evidence. Its bounded
-in-process cache avoids duplicate generations; confidence is explicitly uncalibrated.
-
-The responsive dashboard in `src/dashboard/` uses browser TypeScript and local
-HTML/CSS, compiled/copied into the same service without a frontend bundler.
-
-Next: demo packaging and submission polish. Feature PRs target `dev`;
-the repository owner opens the final `dev` → `main` PR. See NOTES.md for trade-offs
-and AI-use disclosure.
+Feature PRs target `dev`. The repository owner creates the final `dev` → `main` PR.

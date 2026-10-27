@@ -1,0 +1,30 @@
+services:
+  app:
+    image: loop-home-assignment:local
+    build:
+      context: .
+    init: true
+    ports:
+      - '127.0.0.1:${PORT:-3000}:3000'
+    environment:
+      - NODE_ENV=production
+      - HOST=0.0.0.0
+      - PORT=3000
+      - DATABASE_PATH=/app/data/loop.sqlite
+      - CACHE_TTL_SECONDS=${CACHE_TTL_SECONDS:-300}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - LLM_MODEL=${LLM_MODEL:-gpt-4.1-mini}
+      - GITHUB_TOKEN
+      - LLM_API_KEY
+    volumes:
+      - insights-data:/app/data
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 12s
+volumes:
+  insights-data:

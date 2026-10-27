@@ -1,0 +1,16 @@
+.git
+.agents
+.aws
+.codex
+.env
+.env.*
+node_modules
+dist
+data
+coverage
+test
+test-results
+playwright-report
+*.log
+*.sqlite*
+attachments

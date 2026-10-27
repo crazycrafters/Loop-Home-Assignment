@@ -1,0 +1,13 @@
+# Optional overlay for a Docker-managed HTTPS proxy/custom CA; no credentials are stored here.
+services:
+  app:
+    build:
+      secrets:
+        - proxy_ca
+    environment:
+      NODE_EXTRA_CA_CERTS: /run/secrets/proxy_ca
+    secrets:
+      - proxy_ca
+secrets:
+  proxy_ca:
+    file: ${PROXY_CA_FILE:?Set PROXY_CA_FILE to the readable proxy CA certificate}
