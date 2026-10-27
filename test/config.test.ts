@@ -5,7 +5,7 @@ import { loadConfig } from '../src/config.js';
 test('configuration defaults and explicit overrides', () => {
   assert.deepEqual(loadConfig({}), {
     NODE_ENV: 'development', HOST: '127.0.0.1', PORT: 3000, LOG_LEVEL: 'info',
-    DATABASE_PATH: './data/loop.sqlite', CACHE_TTL_SECONDS: 300,
+    DATABASE_PATH: './data/loop.sqlite', CACHE_TTL_SECONDS: 300, LLM_MODEL: 'gpt-4.1-mini',
   });
   assert.equal(loadConfig({ PORT: '8080', NODE_ENV: 'production' }).PORT, 8080);
 });
@@ -28,4 +28,12 @@ test('storage and cache settings are validated without exposing token values', (
   const config = loadConfig({ GITHUB_TOKEN: ' test-token ', CACHE_TTL_SECONDS: '60' });
   assert.equal(config.GITHUB_TOKEN, 'test-token');
   assert.equal(config.CACHE_TTL_SECONDS, 60);
+});
+
+test('LLM configuration is optional and invalid model settings do not echo credentials', () => {
+  assert.equal(loadConfig({}).LLM_MODEL, 'gpt-4.1-mini');
+  assert.equal(loadConfig({ LLM_API_KEY: ' fixture ', LLM_MODEL: 'gpt-4.1-mini' }).LLM_API_KEY, 'fixture');
+  assert.throws(() => loadConfig({ LLM_API_KEY: 'private-value', LLM_MODEL: 'https://attacker.example' }),
+    { message: 'Invalid configuration: LLM_MODEL' });
+  assert.throws(() => loadConfig({ LLM_API_KEY: '' }), { message: 'Invalid configuration: LLM_API_KEY' });
 });

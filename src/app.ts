@@ -6,9 +6,11 @@ import { GitHubCollector } from './github/collector.js';
 import { IngestionService } from './github/ingestion.js';
 import { repositoryParams, syncBody } from './github/model.js';
 import { InsightsService } from './insights/service.js';
+import { OpenAIProvider, type NarrativeProvider } from './narrative/provider.js';
+import { NarrativeService } from './narrative/service.js';
 import { SqliteSnapshotCache } from './storage/cache.js';
 
-export function buildApp(config: Config, dependencies: { ingestion?: IngestionService } = {}) {
+export function buildApp(config: Config, dependencies: { ingestion?: IngestionService; narrativeProvider?: NarrativeProvider } = {}) {
   const app = Fastify({
     logger: {
       level: config.LOG_LEVEL,
@@ -26,6 +28,19 @@ export function buildApp(config: Config, dependencies: { ingestion?: IngestionSe
   );
   app.addHook('onClose', async () => ingestion.close());
   const insights = new InsightsService(ingestion);
+  const narrative = new NarrativeService(insights,
+    dependencies.narrativeProvider ?? new OpenAIProvider(config.LLM_API_KEY, config.LLM_MODEL),
+    config.CACHE_TTL_SECONDS);
+
+  app.post('/api/repos/:owner/:repo/narrative', async (request, reply) => {
+    const params = repositoryParams.safeParse(request.params);
+    const body = syncBody.safeParse(request.body);
+    if (!params.success || !body.success) {
+      throw new ServiceError(400, 'INVALID_INPUT', 'Use a valid repository and ISO-8601 from/to timestamps spanning at most 90 days');
+    }
+    reply.header('Cache-Control', 'no-store');
+    return narrative.get(params.data.owner, params.data.repo, body.data);
+  });
 
   app.get('/api/repos/:owner/:repo/insights', async (request, reply) => {
     const params = repositoryParams.safeParse(request.params);
