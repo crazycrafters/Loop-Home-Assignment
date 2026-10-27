@@ -41,6 +41,14 @@ abstain. This does not prove that the prose entails its citations; live model qu
 must still be evaluated. Bounded per-process caching/coalescing reduces duplicate
 paid calls, but shared deployment needs additional auth and billing controls.
 
+The dashboard adds no frontend runtime dependency or separate service. Browser
+TypeScript uses type-only API contracts and renders text safely, while native
+HTML controls handle forms, tables, expandable evidence, and responsive layouts.
+Narrative calls are explicit. Selection revision checks prevent late responses
+from replacing a newer report, and snapshot mismatches withhold a narrative until
+its numbers can be refreshed. Frontend hot reload is deliberately omitted; build
+and refresh while editing. See docs/dashboard.md for usage and browser setup.
+
 ## Validation
 
 Automated tests cover upstream paging/errors/limits, period boundaries and backlog,
@@ -62,9 +70,16 @@ missing-provider-key 503 response. **No live OpenAI generation was run:** the
 provider credential is not configured. See docs/narratives.md for the exact live
 check to perform once LLM_API_KEY is supplied securely.
 
+Dashboard validation adds real Chromium flow tests with fixture API responses,
+covering metric/evidence rendering, explicit narrative actions, unavailable-provider
+feedback, invalid dates/rate limits, stale source/selection handling, unsafe text and
+links, unexpected payloads, and keyboard/mobile layout. A separate live browser run
+used the real GitHub backend for PRs #109/#108 with no JavaScript errors, including
+the missing-provider state. This does not replace the still-pending live LLM check.
+
 ## With another day
 
-After the planned dashboard milestone, prioritize conditional
+After demo/submission packaging, prioritize conditional
 requests and incremental ingestion for larger repositories, cache observability,
 stronger admission controls for shared deployment, scheduled live contract checks,
 and a labeled evaluation set for narrative accuracy and appropriate abstention.
@@ -76,5 +91,6 @@ and partition caches by access scope.
 
 An OpenAI coding assistant helped plan milestones, implement the foundation and
 GitHub/SQLite ingestion, metric calculations, and the LLM adapter, write tests/docs,
-and run automated and live GitHub validation. LLM responses in tests are fixtures.
+implement the dashboard/browser checks, and run automated and live GitHub/browser
+validation. LLM responses in tests are fixtures.
 Human review of each feature PR remains part of the submission workflow.
