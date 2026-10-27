@@ -1,5 +1,6 @@
 import Fastify from 'fastify';
 import type { Config } from './config.js';
+import { registerDashboard } from './dashboard/routes.js';
 import { ServiceError } from './errors.js';
 import { GitHubClient } from './github/client.js';
 import { GitHubCollector } from './github/collector.js';
@@ -20,6 +21,8 @@ export function buildApp(config: Config, dependencies: { ingestion?: IngestionSe
     requestTimeout: 30_000,
     trustProxy: false,
   });
+
+  registerDashboard(app);
 
   const ingestion = dependencies.ingestion ?? new IngestionService(
     new GitHubCollector(new GitHubClient(config.GITHUB_TOKEN)),

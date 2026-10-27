@@ -1,9 +1,9 @@
 # Loop repository insights
 
 A TypeScript service that collects public GitHub pull-request and review data for
-repository delivery insights. Milestones 1–4 provide GitHub ingestion, SQLite caching,
-delivery/review metrics, and an LLM narrative endpoint with validated fact citations.
-A lightweight dashboard will arrive in the next feature PR into `dev`.
+repository delivery insights. Milestones 1–5 provide GitHub ingestion, SQLite caching,
+delivery/review metrics, LLM narratives with validated fact citations, and a responsive
+dashboard served by the same service.
 
 ## Quickstart
 
@@ -15,7 +15,12 @@ npm ci
 npm run dev
 ```
 
-In another terminal:
+Open the local service’s root page (`/`) for the dashboard. Enter a public
+repository and UTC dates, or choose **Try an example**, then click **Analyze
+repository**. Optional narrative generation requires a server-side LLM credential.
+See [dashboard workflow and development](docs/dashboard.md).
+
+For direct API requests, in another terminal:
 
 ```sh
 curl --fail http://127.0.0.1:3000/health
@@ -39,9 +44,13 @@ npm run build
 npm start
 ```
 
-`npm run check` runs strict type checking, offline tests, and production compilation.
-CI runs the same command on PRs into `dev` and `main`. The tests use upstream fixtures
-and real SQLite; they need no network access or tokens.
+`npm run check` runs strict type checking, production compilation, service tests,
+and Chromium browser tests. `npm test` builds assets before service tests. Browser
+tests use `/usr/bin/chromium` automatically when available, or an executable selected
+by `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`. Otherwise run
+`npx playwright install --with-deps chromium` first. CI reuses its preinstalled browser on Ubuntu 24.04 and runs
+the same checks on PRs into `dev` and `main`. Tests use upstream/provider fixtures
+and real SQLite; test execution needs no network access, tokens, or paid requests.
 
 ## Insights API
 
@@ -208,6 +217,9 @@ The `src/narrative/` adapter sends aggregate facts to a fixed provider origin an
 validates structured citations before resolving source evidence. Its bounded
 in-process cache avoids duplicate generations; confidence is explicitly uncalibrated.
 
-Next: a lightweight dashboard and a complete demo. Feature PRs target `dev`;
+The responsive dashboard in `src/dashboard/` uses browser TypeScript and local
+HTML/CSS, compiled/copied into the same service without a frontend bundler.
+
+Next: demo packaging and submission polish. Feature PRs target `dev`;
 the repository owner opens the final `dev` → `main` PR. See NOTES.md for trade-offs
 and AI-use disclosure.

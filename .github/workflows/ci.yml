@@ -8,7 +8,7 @@ permissions:
   contents: read
 jobs:
   check:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
@@ -17,4 +17,15 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
+      - name: Prepare Chromium
+        timeout-minutes: 3
+        run: |
+          if [ -x /usr/bin/chromium ]; then
+            /usr/bin/chromium --version
+          elif [ -x /usr/bin/google-chrome ]; then
+            echo "PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/google-chrome" >> "$GITHUB_ENV"
+            /usr/bin/google-chrome --version
+          else
+            npx playwright install --with-deps chromium
+          fi
       - run: npm run check
