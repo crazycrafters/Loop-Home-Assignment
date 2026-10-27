@@ -26,8 +26,10 @@ export function buildApp(config: Config) {
   }, async () => ({ status: 'ok' }));
 
   app.setErrorHandler((error, request, reply) => {
-    const status = error.statusCode && error.statusCode >= 400 && error.statusCode < 500
-      ? error.statusCode : 500;
+    const code = typeof error === 'object' && error !== null && 'statusCode' in error
+      ? error.statusCode : undefined;
+    const status = typeof code === 'number' && Number.isInteger(code) && code >= 400 && code < 500
+      ? code : 500;
     if (status >= 500) request.log.error({ err: error }, 'Request failed');
     return reply.status(status).send({
       error: status >= 500 ? 'Internal server error' : 'Invalid request',
