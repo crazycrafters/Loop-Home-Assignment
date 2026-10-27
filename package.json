@@ -11,8 +11,8 @@
     "build": "tsc -p tsconfig.build.json && node scripts/copy-dashboard.mjs",
     "start": "node --use-env-proxy dist/server.js",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test test/*.test.ts",
-    "check": "npm run typecheck && npm run build && npm test && npm run test:browser",
+    "test": "npm run build && tsx --test test/*.test.ts",
+    "check": "npm run typecheck && npm test && npm run test:browser",
     "test:browser": "playwright test"
   },
   "dependencies": {
