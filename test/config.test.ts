@@ -5,6 +5,7 @@ import { loadConfig } from '../src/config.js';
 test('configuration defaults and explicit overrides', () => {
   assert.deepEqual(loadConfig({}), {
     NODE_ENV: 'development', HOST: '127.0.0.1', PORT: 3000, LOG_LEVEL: 'info',
+    DATABASE_PATH: './data/loop.sqlite', CACHE_TTL_SECONDS: 300,
   });
   assert.equal(loadConfig({ PORT: '8080', NODE_ENV: 'production' }).PORT, 8080);
 });
